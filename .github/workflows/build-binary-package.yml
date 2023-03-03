@@ -1,9 +1,15 @@
-# .github/workflows/build-docker-image.yml
+# .github/workflows/build-binary-package.yml
 name: build-binary-package
 
-on: 
+on:
   release:
-    types: prereleased
+    types:
+      - prereleased
+
+permissions:
+  # See: https://stackoverflow.com/a/69941765/5155484
+  # JasonEtco/upload-to-release needs to write to releases
+  contents: write
 
 jobs:
   build-binary-package:
@@ -11,15 +17,39 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        static:
-          - false
-          - true
-        goos:
-          - linux
-          - freebsd
-        goarch:
-          - amd64
-          - arm64
+        include:
+        # Static
+          - { goos: linux, goarch: amd64, static: true, prefix: '', goarm: '' }
+          - { goos: freebsd, goarch: amd64, static: true, prefix: '', goarm: '' }
+          - { goos: linux, goarch: arm64, static: true, prefix: '', goarm: '' }
+          - { goos: freebsd, goarch: arm64, static: true, prefix: '', goarm: '' }
+          - { goos: linux, goarch: 386, static: true, prefix: '', goarm: '' }
+          - { goos: freebsd, goarch: 386, static: true, prefix: '', goarm: '' }
+          - { goos: linux, goarch: arm, static: true, prefix: 'v', goarm: '6' }
+          - { goos: freebsd, goarch: arm, static: true, prefix: 'v', goarm: '6' }
+          - { goos: linux, goarch: arm, static: true, prefix: 'v', goarm: '7' }
+          - { goos: freebsd, goarch: arm, static: true, prefix: 'v', goarm: '7' }
+
+          - { goos: linux, goarch: ppc64le, static: true, prefix: '', goarm: '' }
+          - { goos: linux, goarch: s390x, static: true, prefix: '', goarm: '' }
+          # Not supported by the golang and alpine Docker images
+          - { goos: linux, goarch: riscv64, static: true, prefix: '', goarm: '' }
+        # Not static
+          - { goos: linux, goarch: amd64, static: false, prefix: '', goarm: '' }
+          - { goos: freebsd, goarch: amd64, static: false, prefix: '', goarm: '' }
+          - { goos: linux, goarch: arm64, static: false, prefix: '', goarm: '' }
+          - { goos: freebsd, goarch: arm64, static: false, prefix: '', goarm: '' }
+          - { goos: linux, goarch: 386, static: false, prefix: '', goarm: '' }
+          - { goos: freebsd, goarch: 386, static: false, prefix: '', goarm: '' }
+          - { goos: linux, goarch: arm, static: false, prefix: 'v', goarm: '6' }
+          - { goos: freebsd, goarch: arm, static: false, prefix: 'v', goarm: '6' }
+          - { goos: linux, goarch: arm, static: false, prefix: 'v', goarm: '7' }
+          - { goos: freebsd, goarch: arm, static: false, prefix: 'v', goarm: '7' }
+
+          - { goos: linux, goarch: ppc64le, static: false, prefix: '', goarm: '' }
+          - { goos: linux, goarch: s390x, static: false, prefix: '', goarm: '' }
+          # Not supported by the golang and alpine Docker images
+          - { goos: linux, goarch: riscv64, static: false, prefix: '', goarm: '' }
     steps:
     - name: Set up Go 1.20.1
       uses: actions/setup-go@v3
@@ -31,7 +61,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Build the binaries
+    - name: Build the binaries (${{ matrix.goos }}/${{ matrix.goarch }}${{ matrix.prefix }}${{ matrix.goarm }})
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
@@ -39,31 +69,34 @@ jobs:
         make release
       if: ${{ !matrix.static }}
 
-    - name: Build the binaries (static)
+    - name: Build the binaries (${{ matrix.goos }}/${{ matrix.goarch }}${{ matrix.prefix }}${{ matrix.goarm }}) (static)
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
+        GOARM: ${{ matrix.goarm }}
       run: |
         make release BUILD_STATIC=yes
-        mv crowdsec-blocklist-mirror-${{ env.GOOS }}-${{ env.GOARCH }}.tgz crowdsec-blocklist-mirror-${{ env.GOOS }}-${{ env.GOARCH }}-static.tgz
+        mv crowdsec-blocklist-mirror-${{ env.GOOS }}-${{ env.GOARCH }}${{ matrix.prefix }}${{ env.GOARM }}.tgz crowdsec-blocklist-mirror-${{ env.GOOS }}-${{ env.GOARCH }}${{ matrix.prefix }}${{ env.GOARM }}-static.tgz
       if: ${{ matrix.static }}
 
     - name: Upload to release
       uses: JasonEtco/upload-to-release@master
       with:
-        args: crowdsec-blocklist-mirror-${{ env.GOOS }}-${{ env.GOARCH }}.tgz application/x-gzip
+        args: crowdsec-blocklist-mirror-${{ env.GOOS }}-${{ env.GOARCH }}${{ matrix.prefix }}${{ env.GOARM }}.tgz application/x-gzip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
+        GOARM: ${{ matrix.goarm }}
       if: ${{ !matrix.static }}
 
     - name: Upload to release (static)
       uses: JasonEtco/upload-to-release@master
       with:
-        args: crowdsec-blocklist-mirror-${{ env.GOOS }}-${{ env.GOARCH }}-static.tgz application/x-gzip
+        args: crowdsec-blocklist-mirror-${{ env.GOOS }}-${{ env.GOARCH }}${{ matrix.prefix }}${{ env.GOARM }}-static.tgz application/x-gzip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
+        GOARM: ${{ matrix.goarm }}
       if: ${{ matrix.static }}

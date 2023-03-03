@@ -6,7 +6,61 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
+  build-all-archs:
+    name: Build on all archs
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, freebsd]
+        goarch: [amd64, arm64]
+        include:
+          # Static
+          - { goos: linux, goarch: amd64, prefix: "", goarm: "" }
+          - { goos: freebsd, goarch: amd64, prefix: "", goarm: "" }
+          - { goos: linux, goarch: arm64, prefix: "", goarm: "" }
+          - { goos: freebsd, goarch: arm64, prefix: "", goarm: "" }
+          - { goos: linux, goarch: 386, prefix: "", goarm: "" }
+          - { goos: freebsd, goarch: 386, prefix: "", goarm: "" }
+          - { goos: linux, goarch: arm, prefix: "v", goarm: "6" }
+          - { goos: freebsd, goarch: arm, prefix: "v", goarm: "6" }
+          - { goos: linux, goarch: arm, prefix: "v", goarm: "7" }
+          - { goos: freebsd, goarch: arm, prefix: "v", goarm: "7" }
+
+          - { goos: linux, goarch: ppc64le, prefix: "", goarm: "" }
+          - { goos: linux, goarch: s390x, prefix: "", goarm: "" }
+          # Not supported by the golang and alpine Docker images
+          - { goos: linux, goarch: riscv64, prefix: "", goarm: "" }
+    steps:
+      - name: Set up Go 1.20.1
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.20.1
+        id: go
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Test
+        run: go test -v
+      - name: Build (${{ matrix.goos }}/${{ matrix.goarch }}${{ matrix.prefix }}${{ matrix.goarm }})
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: make build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: crowdsec-blocklist-mirror-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.prefix }}${{ matrix.goarm }}.tgz
+          path: crowdsec-blocklist-mirror
+          retention-days: 1
+
   build:
     strategy:
       matrix:
